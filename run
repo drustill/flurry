@@ -1,0 +1,19 @@
+#!/bin/bash
+
+cd $(dirname $0)
+
+DEPENDENCY="vendored/SDL"
+BUILD="build/"
+
+if [ ! -d "$DEPENDENCY" ]; then
+  echo "SDL not installed."
+  echo "Try this : git clone https://github.com/libsdl-org/SDL.git vendored/SDL"
+  exit 1
+fi
+
+if [ ! -d "$BUILD" ]; then
+  cmake -S . -B build
+fi
+
+cmake --build build
+build/flurry
