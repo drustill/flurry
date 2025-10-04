@@ -1,6 +1,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 
 #define WIDTH 640
 #define HEIGHT 480
@@ -10,8 +12,10 @@ static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
 
 typedef struct {
-  int cx;
-  int cy;
+  float cx;
+  float cy;
+  float vx;
+  float vy;
   int r;
 } Flurry;
 
@@ -27,7 +31,15 @@ int main()
     return SDL_APP_FAILURE;
   }
 
-  Flurry flurry = { WIDTH / 2.0f, HEIGHT / 2.0f, FLURRY_RADIUS };
+  Flurry flurry = { WIDTH / 2.0f, HEIGHT / 2.0f, 50.0f, 30.0f, FLURRY_RADIUS };
+
+  uint64_t curr, prev;
+  prev = SDL_GetTicks();
+
+  const float can_change = 500.0f;
+  const float max_speed = 500.0f;
+
+  srand(time(NULL));
 
   int running = 1;
   while (running) {
@@ -39,10 +51,33 @@ int main()
       }
     }
 
-    const double now = ((double)SDL_GetTicks()) / 1000.0;
+    curr = SDL_GetTicks();
 
-    flurry.cx = WIDTH / 2.0f + 200.0f * SDL_sinf(now);
-    flurry.cy = HEIGHT / 2.0f + 150.0f * SDL_cosf(now * 0.8f);
+    const float elapsed = (float)(curr - prev) / 1000.0f;
+
+    flurry.vx += ((float)rand() / RAND_MAX - 0.5f) * can_change * elapsed;
+    flurry.vy += ((float)rand() / RAND_MAX - 0.5f) * can_change * elapsed;
+
+    float speed = SDL_sqrtf(flurry.vx * flurry.vx + flurry.vy * flurry.vy);
+    if (speed > max_speed) {
+      flurry.vx = (flurry.vx / speed) * max_speed;
+      flurry.vy = (flurry.vy / speed) * max_speed;
+    }
+
+    flurry.cx += flurry.vx * elapsed;
+    flurry.cy += flurry.vy * elapsed;
+
+    if (flurry.cx < flurry.r || flurry.cx > WIDTH - flurry.r) {
+      flurry.vx *= -1;
+      flurry.cx = SDL_clamp(flurry.cx, (float)flurry.r, WIDTH - (float)flurry.r);
+    }
+    if (flurry.cy < flurry.r || flurry.cy > HEIGHT - flurry.r) {
+      flurry.vy *= -1;
+      flurry.cy = SDL_clamp(flurry.cy, (float)flurry.r, HEIGHT - (float)flurry.r);
+    }
+
+    const double now = ((double)curr) / 1000.0;
+    prev = curr;
 
     /* choose the color for the frame we will draw. The sine wave trick makes it fade between colors smoothly. */
     const float red = (float) (0.5 + 0.5 * SDL_sin(now));
@@ -61,7 +96,6 @@ int main()
       }
     }
 
-    /* put the newly-cleared rendering on the screen. */
     SDL_RenderPresent(renderer);
 
   }
