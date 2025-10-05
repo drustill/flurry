@@ -9,7 +9,7 @@
 #define HEIGHT 480
 
 #define NUM_FLURRIES 3
-#define FLURRY_RADIUS 20
+#define FLURRY_RADIUS 5
 #define INITIAL_VELOCITY_X 50.0f
 #define INITIAL_VELOCITY_Y 40.0f
 #define VELOCITY_VARIANCE 1000.0f
@@ -126,25 +126,13 @@ int main()
       pidx[i] = (pidx[i] + 1) % MAX_PARTICLES;
     }
 
-    /* choose the color for the frame we will draw. The sine wave trick makes it fade between colors smoothly. */
-    const float red = (float) (0.5 + 0.5 * SDL_sin(now));
-    const float green = (float) (0.5 + 0.5 * SDL_sin(now + SDL_PI_D * 2 / 3));
-    const float blue = (float) (0.5 + 0.5 * SDL_sin(now + SDL_PI_D * 4 / 3));
-
-    SDL_SetRenderDrawColorFloat(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE_FLOAT);
-    SDL_RenderClear(renderer);
-
     for (int i = 0; i < NUM_FLURRIES; i++) {
+      const float red = (float) (0.5 + 0.5 * SDL_sin(now + i));
+      const float green = (float) (0.5 + 0.5 * SDL_sin(i + now + SDL_PI_D * 2 / 3));
+      const float blue = (float) (0.5 + 0.5 * SDL_sin(i + now + SDL_PI_D * 4 / 3));
+
       SDL_SetRenderDrawColorFloat(renderer, red, green, blue, SDL_ALPHA_OPAQUE_FLOAT);  /* new color, full alpha. */
       SDL_RenderPoints(renderer, (SDL_FPoint*)particles[i], MAX_PARTICLES);
-
-      for (int dy = -flurries[i].r; dy <= flurries[i].r; dy++) {
-        for (int dx = -flurries[i].r; dx <= flurries[i].r; dx++) {
-          if (dx*dx + dy*dy <= flurries[i].r*flurries[i].r) {
-            SDL_RenderPoint(renderer, flurries[i].cx + dx, flurries[i].cy + dy);
-          }
-        }
-      }
     }
 
     SDL_RenderPresent(renderer);
