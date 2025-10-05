@@ -8,7 +8,7 @@
 #define WIDTH 640
 #define HEIGHT 480
 
-#define NUM_FLURRIES 3
+#define NUM_FLURRIES 5
 #define FLURRY_RADIUS 5
 #define INITIAL_VELOCITY_X 50.0f
 #define INITIAL_VELOCITY_Y 40.0f
@@ -16,7 +16,7 @@
 #define MAX_SPEED 300.0f
 #define STEP 10.0f
 
-#define MAX_PARTICLES 50000
+#define MAX_PARTICLES 5000
 
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
