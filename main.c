@@ -3,10 +3,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
 
 #define WIDTH 640
 #define HEIGHT 480
-#define FLURRY_RADIUS 50
+
+#define FLURRY_RADIUS 20
+#define INITIAL_VELOCITY_X 50.0f
+#define INITIAL_VELOCITY_Y 40.0f
+#define VELOCITY_VARIANCE 1000.0f
+#define MAX_SPEED 300.0f
+#define STEP 10.0f
 
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
@@ -31,15 +38,14 @@ int main()
     return SDL_APP_FAILURE;
   }
 
-  Flurry flurry = { WIDTH / 2.0f, HEIGHT / 2.0f, 50.0f, 30.0f, FLURRY_RADIUS };
+  Flurry flurry = { WIDTH / 2.0f, HEIGHT / 2.0f, INITIAL_VELOCITY_X, INITIAL_VELOCITY_Y, FLURRY_RADIUS };
 
   uint64_t curr, prev;
   prev = SDL_GetTicks();
 
-  const float can_change = 500.0f;
-  const float max_speed = 500.0f;
-
   srand(time(NULL));
+
+  int angle_trigger = -10;
 
   int running = 1;
   while (running) {
@@ -55,13 +61,30 @@ int main()
 
     const float elapsed = (float)(curr - prev) / 1000.0f;
 
-    flurry.vx += ((float)rand() / RAND_MAX - 0.5f) * can_change * elapsed;
-    flurry.vy += ((float)rand() / RAND_MAX - 0.5f) * can_change * elapsed;
+    /* angle_trigger += 1; */
+    /* if (angle_trigger == 0) { */
+    /*   angle_trigger -= 10; */
+    if (rand() % 200 == 0) {
+
+      const float angle = ((float)rand() / RAND_MAX - 0.5f) * 0.08f;
+
+      float tmp_vx = flurry.vx;
+      flurry.vx = flurry.vx * cosf(angle) - flurry.vy * sinf(angle);
+      flurry.vy = tmp_vx * sinf(angle) + flurry.vy * cosf(angle);
+    }
+
+    flurry.vx += ((float)rand() / RAND_MAX - 0.5f) * VELOCITY_VARIANCE * elapsed;
+    flurry.vy += ((float)rand() / RAND_MAX - 0.5f) * VELOCITY_VARIANCE * elapsed;
+
+    if (rand() % 20000 == 0) {
+      flurry.vx *= -1;
+      flurry.vy *= -1;
+    }
 
     float speed = SDL_sqrtf(flurry.vx * flurry.vx + flurry.vy * flurry.vy);
-    if (speed > max_speed) {
-      flurry.vx = (flurry.vx / speed) * max_speed;
-      flurry.vy = (flurry.vy / speed) * max_speed;
+    if (speed > MAX_SPEED) {
+      flurry.vx = (flurry.vx / speed) * MAX_SPEED;
+      flurry.vy = (flurry.vy / speed) * MAX_SPEED;
     }
 
     flurry.cx += flurry.vx * elapsed;
