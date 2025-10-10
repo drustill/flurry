@@ -8,7 +8,7 @@
 #define WIDTH 640
 #define HEIGHT 480
 
-#define NUM_FLURRIES 8
+#define NUM_FLURRIES 4
 #define FLURRY_RADIUS 1
 #define INITIAL_VELOCITY_X 0.0f
 #define INITIAL_VELOCITY_Y 0.0f
@@ -16,7 +16,7 @@
 #define MAX_SPEED 100.0f
 #define STEP 10.0f
 
-#define DRAG 0.85f
+#define DRAG 0.92f
 #define LIFETIME 5.0f
 #define MAX_PARTICLES 5000
 
@@ -24,8 +24,15 @@ static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
 
 typedef struct {
-  float cx, cy, vx, vy;
-  int r;
+  /* float cx, cy; */
+  /* float vx, vy; */
+  /* int r; */
+  float base_angle;
+  float length;
+  float growth_rate;
+  float curve_rate;
+  double birthday;
+  int active;
 } Flurry;
 
 typedef struct {
@@ -37,7 +44,7 @@ static int pidx[NUM_FLURRIES] = {0};
 static Particle particles[NUM_FLURRIES][MAX_PARTICLES];
 static Flurry flurries[NUM_FLURRIES];
 
-static float center_x, center_y, center_vx, center_vy;
+static float center_x, center_y;
 
 int main()
 {
@@ -55,15 +62,14 @@ int main()
   srand(time(NULL));
   center_x = WIDTH / 2.0f;
   center_y = HEIGHT / 2.0f;
-  center_vx = INITIAL_VELOCITY_X;
-  center_vy = INITIAL_VELOCITY_Y;
 
   for (int i = 0; i < NUM_FLURRIES; i++) {
-    flurries[i].cx = 0;
-    flurries[i].cy = 0;
-    flurries[i].vx = 0;
-    flurries[i].vy = 0;
-    flurries[i].r = FLURRY_RADIUS;
+    flurries[i].base_angle = ((float)i / NUM_FLURRIES) * 2.0f * M_PI;
+    flurries[i].length = 0.0f;
+    flurries[i].growth_rate = 50.0f + ((float)rand() / RAND_MAX) * 50.0f;
+    flurries[i].curve_rate = ((float)rand() / RAND_MAX - 0.5f) * 0.5f;
+    flurries[i].birthday = 0;
+    flurries[i].active = 1;
   }
 
   uint64_t curr, prev;
@@ -80,63 +86,41 @@ int main()
     }
 
     curr = SDL_GetTicks();
-
     const float elapsed = (float)(curr - prev) / 1000.0f;
-
-    if (rand() % 200 == 0) {
-      const float angle = ((float)rand() / RAND_MAX - 0.5f) * 0.08f;
-      float tmp_vx = center_vx;
-      center_vx = center_vx * cosf(angle) - center_vy * sinf(angle);
-      center_vy = tmp_vx * sinf(angle) + center_vy * cosf(angle);
-    }
-
-    center_vx += ((float)rand() / RAND_MAX - 0.5f) * VELOCITY_VARIANCE * elapsed;
-    center_vy += ((float)rand() / RAND_MAX - 0.5f) * VELOCITY_VARIANCE * elapsed;
-
-    float speed = SDL_sqrtf(center_vx * center_vx + center_vy * center_vy);
-    if (speed > MAX_SPEED) {
-      center_vx = (center_vx / speed) * MAX_SPEED;
-      center_vy = (center_vy / speed) * MAX_SPEED;
-    }
-
-    center_x += center_vx * elapsed;
-    center_y += center_vy * elapsed;
-
-    if (center_x < FLURRY_RADIUS || center_x > WIDTH - FLURRY_RADIUS) {
-      center_vx *= -1;
-      center_x = SDL_clamp(center_x, (float)FLURRY_RADIUS, WIDTH - (float)FLURRY_RADIUS);
-    }
-    if (center_y < FLURRY_RADIUS || center_y > HEIGHT - FLURRY_RADIUS) {
-      center_vy *= -1;
-      center_y = SDL_clamp(center_y, (float)FLURRY_RADIUS, HEIGHT - (float)FLURRY_RADIUS);
-    }
-
     const double now = ((double)curr) / 1000.0;
 
     for (int i = 0; i < NUM_FLURRIES; i++) {
-      float angle = (i/(float)NUM_FLURRIES)*2.0f*M_PI + now * 0.5f;
-      float radius = 50.0f + 50.0f * sinf(now + i);
+      if (!flurries[i].active && rand() % 60 == 0) {
+        flurries[i].base_angle = ((float)rand() / RAND_MAX) * 2.0f * M_PI;
+        flurries[i].length = 0.0f;
+        flurries[i].growth_rate = 50.0f + ((float)rand() / RAND_MAX) * 100.0f;
+        flurries[i].curve_rate = ((float)rand() / RAND_MAX - 0.5f) * 1.0f;
+        flurries[i].birthday = now;
+        flurries[i].active = 1;
+      }
+    }
 
-      flurries[i].cx = center_x + cosf(angle) * radius;
-      flurries[i].cy = center_y + sinf(angle) * radius;
+    for (int i = 0; i < NUM_FLURRIES; i++) {
+      if (!flurries[i].active) continue;
 
-      float tan_velocity = 0.5f;
-      float flurry_vx = -sinf(angle) * radius * tan_velocity;
-      float flurry_vy = cosf(angle) * radius * tan_velocity;
+      flurries[i].length += flurries[i].growth_rate * elapsed;
 
-      float perp_x = -flurry_vy;
-      float perp_y = flurry_vx;
-      float speed = SDL_sqrtf(flurry_vx * flurry_vx + flurry_vy * flurry_vy);
+      if (flurries[i].length > 300.0f) {
+        flurries[i].active = 0;
+        continue;
+      }
+
+      float current_angle = flurries[i].base_angle + flurries[i].curve_rate * flurries[i].length * 0.01f;
+      float tip_x = center_x + cosf(current_angle) * flurries[i].length;
+      float tip_y = center_y + sinf(current_angle) * flurries[i].length;
 
       for (int k = 0; k < 5; k++) {
         particles[i][pidx[i]].birthday = now;
-        particles[i][pidx[i]].x = center_x + ((float)rand() / RAND_MAX - 0.5f) * 5.0f;
-        particles[i][pidx[i]].y = center_y + ((float)rand() / RAND_MAX - 0.5f) * 5.0f;
+        particles[i][pidx[i]].x = tip_x + ((float)rand() / RAND_MAX - 0.5f) * 10.0f;
+        particles[i][pidx[i]].y = tip_y + ((float)rand() / RAND_MAX - 0.5f) * 10.0f;
 
-        float drift = ((float)rand() / RAND_MAX - 0.5f) * 2.0f;
-
-        particles[i][pidx[i]].vx = (flurry_vx * 0.5f) + (perp_x / speed) * drift;
-        particles[i][pidx[i]].vy = (flurry_vy * 0.5f) + (perp_y / speed) * drift;
+        particles[i][pidx[i]].vx = ((float)rand() / RAND_MAX - 0.5f) * 10.0f;
+        particles[i][pidx[i]].vy = ((float)rand() / RAND_MAX - 0.5f) * 10.0f;
 
         pidx[i] = (pidx[i] + 1) % MAX_PARTICLES;
       }
@@ -161,13 +145,12 @@ int main()
 
       for (int j = 0; j < MAX_PARTICLES; j++) {
         float age = now - particles[i][j].birthday;
-        float alpha = 1.0f - (age / LIFETIME) * 0.4f;
+        float alpha = (1.0f - (age / LIFETIME)) * 0.4f;
         if (alpha > 0) {
-          SDL_SetRenderDrawColorFloat(renderer, red, green, blue, alpha);  /* new color, full alpha. */
-          /* SDL_RenderPoint(renderer, particles[i][j].x, particles[i][j].y); */
+          SDL_SetRenderDrawColorFloat(renderer, red, green, blue, alpha);
           SDL_FRect rect = {
-            particles[i][j].x - 2.0f,
-            particles[i][j].y - 2.0f,
+            particles[i][j].x - 3.0f,
+            particles[i][j].y - 3.0f,
             6.0f,
             6.0f
           };
