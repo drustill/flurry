@@ -10,9 +10,9 @@
 
 #define NUM_FLURRIES 8
 #define FLURRY_RADIUS 1
-#define INITIAL_VELOCITY_X 50.0f
-#define INITIAL_VELOCITY_Y 40.0f
-#define VELOCITY_VARIANCE 200.0f
+#define INITIAL_VELOCITY_X 0.0f
+#define INITIAL_VELOCITY_Y 0.0f
+#define VELOCITY_VARIANCE 20.0f
 #define MAX_SPEED 100.0f
 #define STEP 10.0f
 
@@ -93,11 +93,6 @@ int main()
     center_vx += ((float)rand() / RAND_MAX - 0.5f) * VELOCITY_VARIANCE * elapsed;
     center_vy += ((float)rand() / RAND_MAX - 0.5f) * VELOCITY_VARIANCE * elapsed;
 
-    if (rand() % 20000 == 0) {
-      center_vx *= -1;
-      center_vy *= -1;
-    }
-
     float speed = SDL_sqrtf(center_vx * center_vx + center_vy * center_vy);
     if (speed > MAX_SPEED) {
       center_vx = (center_vx / speed) * MAX_SPEED;
@@ -133,7 +128,7 @@ int main()
       float perp_y = flurry_vx;
       float speed = SDL_sqrtf(flurry_vx * flurry_vx + flurry_vy * flurry_vy);
 
-      for (int k = 0; k < 15; k++) {
+      for (int k = 0; k < 5; k++) {
         particles[i][pidx[i]].birthday = now;
         particles[i][pidx[i]].x = center_x + ((float)rand() / RAND_MAX - 0.5f) * 5.0f;
         particles[i][pidx[i]].y = center_y + ((float)rand() / RAND_MAX - 0.5f) * 5.0f;
