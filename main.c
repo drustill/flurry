@@ -7,44 +7,34 @@
 
 #define WIDTH 640
 #define HEIGHT 480
+#define NUM_MAGNETS 4
 
-#define NUM_FLURRIES 4
-#define FLURRY_RADIUS 1
-#define INITIAL_VELOCITY_X 0.0f
-#define INITIAL_VELOCITY_Y 0.0f
-#define VELOCITY_VARIANCE 20.0f
-#define MAX_SPEED 100.0f
-#define STEP 10.0f
-
-#define DRAG 0.92f
-#define LIFETIME 5.0f
+#define DRAG 0.99f
+#define LIFETIME 8.0f
+#define GRAVITY 500000.0f
 #define MAX_PARTICLES 5000
+
+#define INV_RAND_MAX (1.0f / RAND_MAX)
+#define RANDF() (rand() * INV_RAND_MAX - 0.5f)
 
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
 
 typedef struct {
-  /* float cx, cy; */
-  /* float vx, vy; */
-  /* int r; */
-  float base_angle;
-  float length;
-  float growth_rate;
-  float curve_rate;
-  double birthday;
-  int active;
-} Flurry;
+  float x, y;
+  float phase;
+  float orbit_speed;
+  float orbit_radius;
+} Magnet;
 
 typedef struct {
   float x, y, vx, vy;
   double birthday;
 } Particle;
 
-static int pidx[NUM_FLURRIES] = {0};
-static Particle particles[NUM_FLURRIES][MAX_PARTICLES];
-static Flurry flurries[NUM_FLURRIES];
-
-static float center_x, center_y;
+static int pidx = 0;
+static Particle particles[MAX_PARTICLES];
+static Magnet magnets[NUM_MAGNETS];
 
 int main()
 {
@@ -60,16 +50,13 @@ int main()
   SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
 
   srand(time(NULL));
-  center_x = WIDTH / 2.0f;
-  center_y = HEIGHT / 2.0f;
+  float center_x = WIDTH / 2.0f;
+  float center_y = HEIGHT / 2.0f;
 
-  for (int i = 0; i < NUM_FLURRIES; i++) {
-    flurries[i].base_angle = ((float)i / NUM_FLURRIES) * 2.0f * M_PI;
-    flurries[i].length = 0.0f;
-    flurries[i].growth_rate = 50.0f + ((float)rand() / RAND_MAX) * 50.0f;
-    flurries[i].curve_rate = ((float)rand() / RAND_MAX - 0.5f) * 0.5f;
-    flurries[i].birthday = 0;
-    flurries[i].active = 1;
+  for (int i = 0; i < NUM_MAGNETS; i++) {
+    magnets[i].orbit_speed = 0.3f + (float)(NUM_MAGNETS - i) * 0.3f;
+    magnets[i].orbit_radius = 80.0f + (float)(NUM_MAGNETS - i) * 20.0f;
+    magnets[i].phase = (float)i * 2.0f * M_PI / NUM_MAGNETS;
   }
 
   uint64_t curr, prev;
@@ -89,73 +76,74 @@ int main()
     const float elapsed = (float)(curr - prev) / 1000.0f;
     const double now = ((double)curr) / 1000.0;
 
-    for (int i = 0; i < NUM_FLURRIES; i++) {
-      if (!flurries[i].active && rand() % 60 == 0) {
-        flurries[i].base_angle = ((float)rand() / RAND_MAX) * 2.0f * M_PI;
-        flurries[i].length = 0.0f;
-        flurries[i].growth_rate = 50.0f + ((float)rand() / RAND_MAX) * 100.0f;
-        flurries[i].curve_rate = ((float)rand() / RAND_MAX - 0.5f) * 1.0f;
-        flurries[i].birthday = now;
-        flurries[i].active = 1;
-      }
+    for (int i = 0; i < NUM_MAGNETS; i++) {
+      float angle = now * magnets[i].orbit_speed + magnets[i].orbit_radius;
+      magnets[i].x = center_x + cosf(angle) * magnets[i].orbit_radius;
+      magnets[i].y = center_y + sinf(angle) * magnets[i].orbit_radius;
     }
 
-    for (int i = 0; i < NUM_FLURRIES; i++) {
-      if (!flurries[i].active) continue;
-
-      flurries[i].length += flurries[i].growth_rate * elapsed;
-
-      if (flurries[i].length > 300.0f) {
-        flurries[i].active = 0;
-        continue;
-      }
-
-      float current_angle = flurries[i].base_angle + flurries[i].curve_rate * flurries[i].length * 0.01f;
-      float tip_x = center_x + cosf(current_angle) * flurries[i].length;
-      float tip_y = center_y + sinf(current_angle) * flurries[i].length;
-
-      for (int k = 0; k < 5; k++) {
-        particles[i][pidx[i]].birthday = now;
-        particles[i][pidx[i]].x = tip_x + ((float)rand() / RAND_MAX - 0.5f) * 10.0f;
-        particles[i][pidx[i]].y = tip_y + ((float)rand() / RAND_MAX - 0.5f) * 10.0f;
-
-        particles[i][pidx[i]].vx = ((float)rand() / RAND_MAX - 0.5f) * 10.0f;
-        particles[i][pidx[i]].vy = ((float)rand() / RAND_MAX - 0.5f) * 10.0f;
-
-        pidx[i] = (pidx[i] + 1) % MAX_PARTICLES;
-      }
+    for (int k = 0; k < 3; k++) {
+      particles[pidx].birthday = now;
+      particles[pidx].x = center_x + RANDF() * 10.0f;
+      particles[pidx].y = center_y + RANDF() * 10.0f;
+      particles[pidx].vx = RANDF() * 20.0f;
+      particles[pidx].vy = RANDF() * 20.0f;
+      pidx = (pidx + 1) % MAX_PARTICLES;
     }
 
-    for (int i = 0; i < NUM_FLURRIES; i++) {
-      for (int j = 0; j < MAX_PARTICLES; j++) {
-        particles[i][j].x += particles[i][j].vx * elapsed;
-        particles[i][j].y += particles[i][j].vy * elapsed;
-        particles[i][pidx[i]].vx *= DRAG;
-        particles[i][pidx[i]].vy *= DRAG;
+    for (int i = 0; i < MAX_PARTICLES; i++) {
+      for (int j = 0; j < NUM_MAGNETS; j++) {
+        float dx = particles[i].x - magnets[j].x;
+        float dy = particles[i].y - magnets[j].y;
+        float rsquared = dx*dx + dy*dy;
+
+        if (rsquared < 2500.0f) {
+          rsquared = 2500.0f;
+        }
+
+        float force = GRAVITY / rsquared;
+        float magnitude = force / sqrt(rsquared);
+
+        particles[i].vx -= (dx * magnitude) * elapsed;
+        particles[i].vy -= (dy * magnitude) * elapsed;
       }
+
+      particles[i].vx *= DRAG;
+      particles[i].vy *= DRAG;
+
+      particles[i].x += particles[i].vx * elapsed;
+      particles[i].y += particles[i].vy * elapsed;
     }
 
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
-    for (int i = 0; i < NUM_FLURRIES; i++) {
-      const float red = (float) (0.5 + 0.5 * SDL_sin(now + i));
-      const float green = (float) (0.5 + 0.5 * SDL_sin(i + now + SDL_PI_D * 2 / 3));
-      const float blue = (float) (0.5 + 0.5 * SDL_sin(i + now + SDL_PI_D * 4 / 3));
+    for (int i = 0; i < NUM_MAGNETS; i++) {
+      SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+      SDL_FRect magnet_rect = { magnets[i].x - 5.0f, magnets[i].y - 5.0f, 10.0f, 10.0f };
+      SDL_RenderFillRect(renderer, &magnet_rect);
+    }
 
-      for (int j = 0; j < MAX_PARTICLES; j++) {
-        float age = now - particles[i][j].birthday;
-        float alpha = (1.0f - (age / LIFETIME)) * 0.4f;
-        if (alpha > 0) {
-          SDL_SetRenderDrawColorFloat(renderer, red, green, blue, alpha);
-          SDL_FRect rect = {
-            particles[i][j].x - 3.0f,
-            particles[i][j].y - 3.0f,
-            6.0f,
-            6.0f
-          };
-          SDL_RenderFillRect(renderer, &rect);
-        }
+    const float r = 0.5f;
+    const float g = 0.8f;
+    const float b = 1.0f;
+    /* const float r = (float) (0.4 + 0.4 * SDL_sin(now + i)); */
+    /* const float g = (float) (0.4 + 0.4 * SDL_sin(i + now + SDL_PI_D * 2 / 3)); */
+    /* const float b = (float) (0.4 + 0.4 * SDL_sin(i + now + SDL_PI_D * 4 / 3)); */
+
+    for (int j = 0; j < MAX_PARTICLES; j++) {
+      float age = now - particles[j].birthday;
+      float alpha = (1.0f - (age / LIFETIME)) * 0.5f;
+
+      if (alpha > 0) {
+        SDL_SetRenderDrawColorFloat(renderer, r, g, b, alpha);
+        SDL_FRect rect = {
+          particles[j].x - 3.0f,
+          particles[j].y - 3.0f,
+          6.0f,
+          6.0f
+        };
+        SDL_RenderFillRect(renderer, &rect);
       }
     }
 
