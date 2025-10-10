@@ -8,7 +8,7 @@
 #define WIDTH 640
 #define HEIGHT 480
 
-#define NUM_FLURRIES 1
+#define NUM_FLURRIES 8
 #define FLURRY_RADIUS 1
 #define INITIAL_VELOCITY_X 50.0f
 #define INITIAL_VELOCITY_Y 40.0f
@@ -120,24 +120,28 @@ int main()
 
     for (int i = 0; i < NUM_FLURRIES; i++) {
       float angle = (i/(float)NUM_FLURRIES)*2.0f*M_PI + now * 0.5f;
-      float radius = 10.0f + 10.0f * sinf(now + i);
+      float radius = 50.0f + 50.0f * sinf(now + i);
 
       flurries[i].cx = center_x + cosf(angle) * radius;
       flurries[i].cy = center_y + sinf(angle) * radius;
 
-      float perp_x = -center_vy;
-      float perp_y = center_vx;
-      float speed = SDL_sqrtf(center_vx * center_vx + center_vy * center_vy);
+      float tan_velocity = 0.5f;
+      float flurry_vx = -sinf(angle) * radius * tan_velocity;
+      float flurry_vy = cosf(angle) * radius * tan_velocity;
 
-      for (int k = 0; k < 5; k++) {
+      float perp_x = -flurry_vy;
+      float perp_y = flurry_vx;
+      float speed = SDL_sqrtf(flurry_vx * flurry_vx + flurry_vy * flurry_vy);
+
+      for (int k = 0; k < 15; k++) {
         particles[i][pidx[i]].birthday = now;
-        particles[i][pidx[i]].x = flurries[i].cx + ((float)rand() / RAND_MAX - 0.5f) * 15.0f;
-        particles[i][pidx[i]].y = flurries[i].cy + ((float)rand() / RAND_MAX - 0.5f) * 15.0f;
+        particles[i][pidx[i]].x = center_x + ((float)rand() / RAND_MAX - 0.5f) * 5.0f;
+        particles[i][pidx[i]].y = center_y + ((float)rand() / RAND_MAX - 0.5f) * 5.0f;
 
-        float drift = ((float)rand() / RAND_MAX - 0.5f) * 10.0f;
+        float drift = ((float)rand() / RAND_MAX - 0.5f) * 2.0f;
 
-        particles[i][pidx[i]].vx = (center_vx * 0.5f) + (perp_x / speed) * drift;
-        particles[i][pidx[i]].vy = (center_vy * 0.5f) + (perp_y / speed) * drift;
+        particles[i][pidx[i]].vx = (flurry_vx * 0.5f) + (perp_x / speed) * drift;
+        particles[i][pidx[i]].vy = (flurry_vy * 0.5f) + (perp_y / speed) * drift;
 
         pidx[i] = (pidx[i] + 1) % MAX_PARTICLES;
       }
