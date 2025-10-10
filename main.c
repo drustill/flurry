@@ -8,14 +8,16 @@
 #define WIDTH 640
 #define HEIGHT 480
 
-#define NUM_FLURRIES 5
-#define FLURRY_RADIUS 5
+#define NUM_FLURRIES 1
+#define FLURRY_RADIUS 1
 #define INITIAL_VELOCITY_X 50.0f
 #define INITIAL_VELOCITY_Y 40.0f
-#define VELOCITY_VARIANCE 1000.0f
-#define MAX_SPEED 300.0f
+#define VELOCITY_VARIANCE 200.0f
+#define MAX_SPEED 100.0f
 #define STEP 10.0f
 
+#define DRAG 0.85f
+#define LIFETIME 5.0f
 #define MAX_PARTICLES 5000
 
 static SDL_Window *window = NULL;
@@ -27,7 +29,8 @@ typedef struct {
 } Flurry;
 
 typedef struct {
-  float x, y;
+  float x, y, vx, vy;
+  double birthday;
 } Particle;
 
 static int pidx[NUM_FLURRIES] = {0};
@@ -47,6 +50,7 @@ int main()
     SDL_Log("Couldn't create video/renderer: %s", SDL_GetError());
     return SDL_APP_FAILURE;
   }
+  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
 
   srand(time(NULL));
   center_x = WIDTH / 2.0f;
@@ -116,23 +120,61 @@ int main()
 
     for (int i = 0; i < NUM_FLURRIES; i++) {
       float angle = (i/(float)NUM_FLURRIES)*2.0f*M_PI + now * 0.5f;
-      float radius = 20.0f + 20.0f * sinf(now + i);
+      float radius = 10.0f + 10.0f * sinf(now + i);
 
       flurries[i].cx = center_x + cosf(angle) * radius;
       flurries[i].cy = center_y + sinf(angle) * radius;
 
-      particles[i][pidx[i]].x = flurries[i].cx + ((float)rand() / RAND_MAX - 0.5f) * 15.0f;
-      particles[i][pidx[i]].y = flurries[i].cy + ((float)rand() / RAND_MAX - 0.5f) * 15.0f;
-      pidx[i] = (pidx[i] + 1) % MAX_PARTICLES;
+      float perp_x = -center_vy;
+      float perp_y = center_vx;
+      float speed = SDL_sqrtf(center_vx * center_vx + center_vy * center_vy);
+
+      for (int k = 0; k < 5; k++) {
+        particles[i][pidx[i]].birthday = now;
+        particles[i][pidx[i]].x = flurries[i].cx + ((float)rand() / RAND_MAX - 0.5f) * 15.0f;
+        particles[i][pidx[i]].y = flurries[i].cy + ((float)rand() / RAND_MAX - 0.5f) * 15.0f;
+
+        float drift = ((float)rand() / RAND_MAX - 0.5f) * 10.0f;
+
+        particles[i][pidx[i]].vx = (center_vx * 0.5f) + (perp_x / speed) * drift;
+        particles[i][pidx[i]].vy = (center_vy * 0.5f) + (perp_y / speed) * drift;
+
+        pidx[i] = (pidx[i] + 1) % MAX_PARTICLES;
+      }
     }
+
+    for (int i = 0; i < NUM_FLURRIES; i++) {
+      for (int j = 0; j < MAX_PARTICLES; j++) {
+        particles[i][j].x += particles[i][j].vx * elapsed;
+        particles[i][j].y += particles[i][j].vy * elapsed;
+        particles[i][pidx[i]].vx *= DRAG;
+        particles[i][pidx[i]].vy *= DRAG;
+      }
+    }
+
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
 
     for (int i = 0; i < NUM_FLURRIES; i++) {
       const float red = (float) (0.5 + 0.5 * SDL_sin(now + i));
       const float green = (float) (0.5 + 0.5 * SDL_sin(i + now + SDL_PI_D * 2 / 3));
       const float blue = (float) (0.5 + 0.5 * SDL_sin(i + now + SDL_PI_D * 4 / 3));
 
-      SDL_SetRenderDrawColorFloat(renderer, red, green, blue, SDL_ALPHA_OPAQUE_FLOAT);  /* new color, full alpha. */
-      SDL_RenderPoints(renderer, (SDL_FPoint*)particles[i], MAX_PARTICLES);
+      for (int j = 0; j < MAX_PARTICLES; j++) {
+        float age = now - particles[i][j].birthday;
+        float alpha = 1.0f - (age / LIFETIME) * 0.4f;
+        if (alpha > 0) {
+          SDL_SetRenderDrawColorFloat(renderer, red, green, blue, alpha);  /* new color, full alpha. */
+          /* SDL_RenderPoint(renderer, particles[i][j].x, particles[i][j].y); */
+          SDL_FRect rect = {
+            particles[i][j].x - 2.0f,
+            particles[i][j].y - 2.0f,
+            6.0f,
+            6.0f
+          };
+          SDL_RenderFillRect(renderer, &rect);
+        }
+      }
     }
 
     SDL_RenderPresent(renderer);
